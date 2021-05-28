@@ -9,7 +9,6 @@ import sys
 import subprocess
 import shutil
 import time
-import re
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
@@ -48,8 +47,9 @@ ignore_path = [
 ]
 ignore_path_str = ''
 
+f = open('output1.txt', 'w')
 os.chdir(r'D:\project\yozo-epweb-del')
-print(os.getcwd())
+print(os.getcwd(), file=f)
 os.makedirs(back_not_used_dir, 755, exist_ok=True)
 
 for path in ignore_path:
@@ -59,15 +59,15 @@ for path in ignore_path:
         ignore_path_str += '-path "' + path + '" -o '
 
 def do_find_command(search_dir, file_type):
-    print('search_dir:%s' % search_dir)
-    print('file_type:%s' % file_type)
+    print('\n search_dir:%s' % search_dir, file=f)
+    print('\n file_type:%s' % file_type, file=f)
     global ignore_path_str
     dict = {}
     if len(search_dir) == 0 or len(file_type) == 0:
         return dict
     search_dir = search_dir.replace('\n', '')
     command = "find '{}' \( {ignore} \) -prune -o -name '*.{other}'".format(search_dir, other=file_type, ignore=ignore_path_str)
-    print('command:%s' % command)
+    print('\n do_find_command:%s' % command, file=f)
     s = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
     results = s.communicate()[0].split()
     index = 1
@@ -75,7 +75,12 @@ def do_find_command(search_dir, file_type):
         name = name.decode('utf-8')
         if not name.endswith(file_type):
             continue
-        if name == '.png' or name == '.jpg' or name == '.jpeg' or name == '.gif' or name == '.svg' or name == '2.svg':
+        if name == '.png' or \
+           name == '.jpg' or \
+           name == '.jpeg' or \
+           name == '.gif' or \
+           name == '.svg' or \
+           name == '2.svg':
             continue
         dict[file_type + str(index)] = name
         index = index + 1
@@ -83,19 +88,21 @@ def do_find_command(search_dir, file_type):
 
 
 def do_grep(path, key_word):
-    key_word = key_word.replace('./', '')
-    command = "grep -Rliw --include=\*.{html,css,scss,js} '%s' '%s'" % (key_word, path)
-    if str(subprocess.getoutput(command)).find('No such') > -1:
-        return True
-    else:
+    key_word = key_word[key_word.rindex('/') + 1:]
+    print("\n key_word: %s" % key_word, file=f)
+    command = "grep -Rliw --include=\*.{html,scss,js} --exclude=\*{-bundle.js,-mini.js,js.map} '%s' '%s'" % (key_word, path)
+    print("\n do_grep: %s" % command, file=f)
+    if subprocess.getoutput(command):
         return False
+    else:
+        return True
 
 
 def goal_file(path):
     files = []
     for dirName, subdirList, fileList in os.walk(path):
         for fname in fileList:
-            if fname.find('-bundle') > 0 or fname.find('min.') > 0 or fname.find('dll.') > 0:
+            if fname.find('-bundle') > -1 or fname.find('min.') > -1 or fname.find('dll.') > -1:
                 continue
             files.append(path)
     return files
@@ -122,48 +129,42 @@ def support_types():
 
 def delete_not_used_image(path):
     os.remove(path)
-    print('\r\n ========%s is deleted========' % path)
+    print('\n ========%s is deleted========' % path, file=f)
 
 
 def move_not_used_image(path):
     tmp = path.replace('./', '')
-    print("tmp: %s" % tmp)
+    print("\n tmp: %s" % tmp, file=f)
     try:
         out_dir = back_not_used_dir + '/' + tmp[: tmp.rindex('/')]
     except ValueError:
         out_dir = back_not_used_dir
-    print("out_dir: %s" % out_dir)
+    print("\n out_dir: %s" % out_dir, file=f)
     os.makedirs(out_dir, 755, exist_ok=True)
     shutil.move(path, out_dir)
-    print('\r\n ========%s is moved========' % path)
+    print('\n ========%s is moved========' % path, file=f)
 
 
 def start_find_task():
-    print("\nstart finding task...\nbelows are not used images:\n")
+    print("\n start finding task...\nbelows are not used images:\n", file=f)
     global project_dir
     if len(sys.argv) > 1:
         project_dir = sys.argv[1]
     if project_dir == " ":
-        print("error! project_dir can not be nil")
-    print("\nproject_dir:")
-    print(project_dir)
+        print("\n error! project_dir can not be nil", file=f)
     start = time.time()
     i = 0
     results = {}
     for type_keyword in support_types():
         results = dict(results, **do_find_command(project_dir, type_keyword))
-    # goal_files = {}
-    # for type_path in is_available_file_path():
-    #     goal_files = dict(goal_files, **do_find_command(project_dir, type_path))
-    print("\nresults:")
-    print(results)
-    # print("\ngoal_files:")
-    # print(goal_files.values())
+    print("\n results: %s" % results.values(), file=f)
     for result in results.values():
-        if do_grep('./*', result):
+        if do_grep('.', result):
             i = i + 1
             move_not_used_image(result)
     c = time.time() - start
-    print('\nsearch finish,find %s results,total count %0.2f s' % (i, c))
+    print('\n search finish,find %s results,total count %0.2f s' % (i, c), file=f)
 
 start_find_task()
+
+f.close()
